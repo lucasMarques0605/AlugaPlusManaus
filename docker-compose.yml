@@ -1,0 +1,97 @@
+version: '3'
+
+networks:
+  network-aluga-carro:
+
+services:
+  nginx:
+    image: nginx:1.18.0-alpine
+    container_name: nginx-aluga-carro
+    ports:
+      - "80:80"
+    volumes:
+      - ./:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - php
+      - mysql
+    networks:
+      - network-aluga-carro
+  php:
+    build: docker/php-fpm
+    container_name: aluga-carro
+    entrypoint: dockerize -wait tcp://${DB_HOST}:3306 -timeout 60s /entrypoint.sh
+    environment:
+      CONTAINER_NAME: PHP
+    #user: "1000:1000"
+    volumes:
+      - ./:/var/www/html
+    expose:
+      - "9000"
+    depends_on:
+      - mysql
+    networks:
+      - network-aluga-carro
+  mysql:
+    image: mysql:5.7.29
+    container_name: mysql-aluga-carro
+    command: --innodb-use-native-aio=0
+    restart: unless-stopped
+    tty: true
+    volumes:
+      - .docker/mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: "${DB_DATABASE}"
+      MYSQL_USER:     "${DB_USERNAME}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD}"
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql-aluga-carro
+    networks:
+      - network-aluga-carro
+#  mysql-test:
+#    image: mysql:5.7.29
+#    tmpfs: /var/lib/mysql
+#    container_name: mysql-test-aluga-carro
+#    command: --innodb-use-native-aio=0
+#    environment:
+#      MYSQL_DATABASE: "${DB_DATABASE}"
+#      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD}"
+#      SERVICE_TAGS: dev
+#      SERVICE_NAME: mysql-test-aluga-carro
+#    networks:
+#      - network-aluga-carro
+  phpmyadmin:
+    build: docker/phpmyadmin
+    container_name: phpmyadmin-aluga-carro
+    environment:
+      PMA_ARBITRARY: 1
+    ports:
+      - "8080:80"
+    volumes:
+      - .docker/phpmyadmin/data/sessions:/sessions
+    networks:
+      - network-aluga-carro
+  websockets:
+    build: docker/websockets-laravel
+    container_name: websockets-aluga-carro
+    ports:
+      - "6001:6001"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - network-aluga-carro
+    environment:
+      CONTAINER_NAME: WEBSOCKET
+  redis:
+    image: redis:alpine3.11
+    container_name: redis-aluga-carro
+    expose:
+      - 6379
+    ports:
+      - "6379:6379"
+    networks:
+      - network-aluga-carro
